@@ -1,3 +1,5 @@
+from typing import List
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 
@@ -31,3 +33,22 @@ def criar_produto(produto: Produto):
     contador_id += 1
     
     return novo_produto
+
+@app.get("/produtos/", response_model=List[ProdutoResponse])
+def listar_produtos():
+    return lista_de_dados
+
+@app.get("/produtos/{produto_id}", response_model=ProdutoResponse)
+def obter_produto(produto_ido: int):
+    for produto in lista_de_dados:
+        if produto["id"] == produto_ido:
+            return produto
+    return {"erro": "Produto não encontrado"}
+
+@app.put("/produtos/{produto_id}", response_model=ProdutoResponse)
+def atualizar_produto(produto_id: int, produto_atualizado: Produto):
+    for produto in lista_de_dados:
+        if produto["id"] == produto_id:
+            produto.update(produto_atualizado.model_dump())
+            return produto
+    return {"erro": "Produto não encontrado"}
