@@ -41,6 +41,10 @@ def criar_produto(produto: Produto, db: Session = Depends(get_db)):
     # lista_de_dados.append(novo_produto)
     # contador_id += 1
 
+    produto_existente = db.query(ProdutoDB).filter(ProdutoDB.nome == produto.nome).first()
+    if produto_existente:
+        raise HTTPException(status_code=400, detail="Produto já existe")
+
     novo_produto = ProdutoDB(**produto.model_dump())
     db.add(novo_produto)
     db.commit()
