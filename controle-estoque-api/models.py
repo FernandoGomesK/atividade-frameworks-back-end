@@ -8,3 +8,10 @@ class ProdutoDB(Base):
     nome = Column(String, index=True)
     preco = Column(Float)
     quantidade = Column(Integer)
+
+class UsuarioDB(Base):
+    __tablename__ = "usuarios"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True)
+    senha = Column(String)
