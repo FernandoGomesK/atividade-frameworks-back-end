@@ -1,23 +1,29 @@
 from typing import List
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import ProdutoDB
+from models import ProdutoDB, UsuarioDB
 
+from auth import gerar_senha_hash, verificar_senha, criar_token_acesso, validar_usuario
 
 app = FastAPI(
     title="API Controle de Estoque",
     description="API para controle de estoque de produtos",
 )
 
-# lista de dados pra ser o banco de dados, contador de IDs
+class UsuarioCreate(BaseModel):
+    email: str
+    senha: str
 
-# lista_de_dados = []
-# contador_id = 1
+class Token(BaseModel):
+    access_token: str
+    token_type: str
 
 class Produto(BaseModel):
     nome: str
@@ -32,14 +38,35 @@ class ProdutoResponse(Produto):
     
 # endpoints
 
-@app.post("/produtos/", response_model=ProdutoResponse)
-def criar_produto(produto: Produto, db: Session = Depends(get_db)):
-    # global contador_id
-    # novo_produto = produto.model_dump()
-    # novo_produto["id"] = contador_id
+@app.post("/usuarios/")
+def criar_usuario(usuario: UsuarioCreate, db: Session = Depends(get_db)):
+    usuario_existente = db.query(UsuarioDB).filter(UsuarioDB.email == usuario.email).first()
+    if usuario_existente:
+        raise HTTPException(status_code=400, detail="Usuário já existe")
+
+    novo_usuario = UsuarioDB(email=usuario.email, senha=gerar_senha_hash(usuario.senha))
+    db.add(novo_usuario)
+    db.commit()
+    db.refresh(novo_usuario)
+    return {"detail": "Usuário criado com sucesso"}
+
+@app.post("/token", response_model=Token)
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    usuario = db.query(UsuarioDB).filter(UsuarioDB.email == form_data.username).first()
     
-    # lista_de_dados.append(novo_produto)
-    # contador_id += 1
+    if not usuario or not verificar_senha(form_data.password, usuario.senha):
+        raise HTTPException(status_code=401, detail="Email ou senha incorretos")
+    
+    token = criar_token_acesso(data={"sub": usuario.email})
+    return {"access_token": token, "token_type": "bearer"}
+
+
+# Endpoints de produtos
+
+
+@app.post("/produtos/", response_model=ProdutoResponse)
+def criar_produto(produto: Produto, db: Session = Depends(get_db),
+                  usuario_atual: UsuarioDB = Depends(validar_usuario)):
 
     produto_existente = db.query(ProdutoDB).filter(ProdutoDB.nome == produto.nome).first()
     if produto_existente:
@@ -65,7 +92,8 @@ def obter_produto(produto_id: int, db: Session = Depends(get_db)):
     return produto
 
 @app.put("/produtos/{produto_id}", response_model=ProdutoResponse)
-def atualizar_produto(produto_id: int, produto_atualizado: Produto, db: Session = Depends(get_db)):
+def atualizar_produto(produto_id: int, produto_atualizado: Produto, db: Session = Depends(get_db),
+                      usuario_logado: UsuarioDB = Depends(validar_usuario)):
     produto = db.query(ProdutoDB).filter(ProdutoDB.id == produto_id).first()
     if not produto:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
@@ -78,7 +106,8 @@ def atualizar_produto(produto_id: int, produto_atualizado: Produto, db: Session 
     return produto
 
 @app.delete("/produtos/{produto_id}", status_code=204)
-def deletar_produto(produto_id: int, db: Session = Depends(get_db)):
+def deletar_produto(produto_id: int, db: Session = Depends(get_db), 
+                    usuario_logado: UsuarioDB = Depends(validar_usuario)):
     produto = db.query(ProdutoDB).filter(ProdutoDB.id == produto_id).first()
     if not produto:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
