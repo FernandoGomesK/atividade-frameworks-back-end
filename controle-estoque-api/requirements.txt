@@ -1,0 +1,7 @@
+fastapi[standard]
+sqlalchemy
+alembic
+passlib[bcrypt]
+pyjwt
+pytest
+httpx
